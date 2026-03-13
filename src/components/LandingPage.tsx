@@ -740,24 +740,26 @@ export function LandingPage() {
           </motion.button>
         )}
 
-        {/* BOTÃO WHATSAPP (Sempre presente) */}
-        <a 
-          href={data.whatsapp.link}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group relative"
-        >
-          <div className="absolute -inset-4 bg-green-500/20 rounded-full blur-xl group-hover:bg-green-500/40 transition-all animate-pulse" />
-          <div className="relative w-16 h-16 bg-gradient-to-br from-[#25D366] to-[#128C7E] text-white rounded-2xl flex items-center justify-center shadow-[0_15px_35px_rgba(37,211,102,0.25)] group-hover:scale-110 group-active:scale-95 transition-all">
-            <MessageCircle size={32} />
-            <div className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full border-2 border-[#25D366] flex items-center justify-center">
-              <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping" />
+        {/* BOTÃO WHATSAPP (condicional) */}
+        {(data.whatsapp?.enabled !== false) && (
+          <a 
+            href={data.whatsapp.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group relative"
+          >
+            <div className="absolute -inset-4 bg-green-500/20 rounded-full blur-xl group-hover:bg-green-500/40 transition-all animate-pulse" />
+            <div className="relative w-16 h-16 bg-gradient-to-br from-[#25D366] to-[#128C7E] text-white rounded-2xl flex items-center justify-center shadow-[0_15px_35px_rgba(37,211,102,0.25)] group-hover:scale-110 group-active:scale-95 transition-all">
+              <MessageCircle size={32} />
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full border-2 border-[#25D366] flex items-center justify-center">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping" />
+              </div>
             </div>
-          </div>
-          <div className="absolute right-full mr-6 top-1/2 -translate-y-1/2 bg-white text-zinc-900 font-black text-xs px-6 py-3 rounded-2xl opacity-0 translate-x-10 group-hover:opacity-100 group-hover:translate-x-0 transition-all shadow-2xl pointer-events-none whitespace-nowrap uppercase tracking-widest">
-            {data.whatsapp.label}
-          </div>
-        </a>
+            <div className="absolute right-full mr-6 top-1/2 -translate-y-1/2 bg-white text-zinc-900 font-black text-xs px-6 py-3 rounded-2xl opacity-0 translate-x-10 group-hover:opacity-100 group-hover:translate-x-0 transition-all shadow-2xl pointer-events-none whitespace-nowrap uppercase tracking-widest">
+              {data.whatsapp.label}
+            </div>
+          </a>
+        )}
       </div>
 
       <AIChatPopup 

@@ -5,6 +5,7 @@ export interface SiteData {
     number: string;
     link: string;
     label: string;
+    enabled: boolean;
   };
   menu: {
     essencia: string;
@@ -115,7 +116,8 @@ export const DEFAULT_DATA: SiteData = {
   whatsapp: {
     number: "+55 11 94010-9991",
     link: "https://wa.me/5511940109991",
-    label: "Falar com Especialista"
+    label: "Falar com Especialista",
+    enabled: true
   },
   menu: {
     essencia: "Nossa Essência",

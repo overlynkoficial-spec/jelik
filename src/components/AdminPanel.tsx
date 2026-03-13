@@ -278,11 +278,27 @@ export function AdminPanel() {
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-10">
               {/* WHATSAPP SECTION */}
               <div className="bg-white/5 p-10 rounded-[2.5rem] border border-white/10">
-                <div className="flex items-center gap-4 mb-10">
-                  <div className="w-12 h-12 rounded-2xl bg-green-500/20 flex items-center justify-center text-green-500">
-                    <Smartphone size={24} />
+                <div className="flex items-center justify-between mb-10">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-green-500/20 flex items-center justify-center text-green-500">
+                      <Smartphone size={24} />
+                    </div>
+                    <h3 className="text-2xl font-black">Configuração WhatsApp</h3>
                   </div>
-                  <h3 className="text-2xl font-black">Configuração WhatsApp</h3>
+
+                  <div className="flex items-center gap-3 bg-white/5 px-6 py-3 rounded-2xl border border-white/10">
+                    <span className="text-xs font-black uppercase tracking-widest text-zinc-400">Botão:</span>
+                    <button
+                      onClick={() => updateNestedData('whatsapp.enabled', !data.whatsapp.enabled)}
+                      className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                        data.whatsapp.enabled
+                          ? 'bg-green-500 text-white shadow-lg shadow-green-500/20'
+                          : 'bg-zinc-700 text-zinc-400'
+                      }`}
+                    >
+                      {data.whatsapp.enabled ? 'Ativado' : 'Desativado'}
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="grid gap-8">
