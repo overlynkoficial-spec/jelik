@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { Upload, X, Image as ImageIcon } from 'lucide-react';
+import { Upload, X, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { uploadImage } from '../lib/storage';
 
 interface ImageUploadProps {
   value: string;
@@ -24,6 +25,8 @@ export function ImageUpload({
   directory = false
 }: ImageUploadProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = React.useState(false);
+  const [progress, setProgress] = React.useState('');
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -32,50 +35,52 @@ export function ImageUpload({
     if (multiple || directory) {
       if (!onMultipleChange) return;
       
-      const newImages: string[] = [];
       const imageFiles = (Array.from(files) as File[]).filter(f => f.type.startsWith('image/'));
-      
       if (imageFiles.length === 0) {
         alert('Nenhuma imagem válida encontrada.');
         return;
       }
 
-      for (const file of imageFiles) {
-        // Limit size for stability
-        if (file.size > 5 * 1024 * 1024) continue;
-
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        newImages.push(base64);
+      setUploading(true);
+      const newUrls: string[] = [];
+      try {
+        for (let i = 0; i < imageFiles.length; i++) {
+          setProgress(`Enviando ${i + 1}/${imageFiles.length}...`);
+          const url = await uploadImage(imageFiles[i]);
+          newUrls.push(url);
+        }
+        onMultipleChange(newUrls);
+      } catch (err) {
+        console.error('Upload error:', err);
+        alert('Erro ao enviar imagens. Verifique sua conexão e tente novamente.');
+      } finally {
+        setUploading(false);
+        setProgress('');
+        if (fileInputRef.current) fileInputRef.current.value = '';
       }
-      
-      onMultipleChange(newImages);
-      // Reset input so same files can be picked again if needed
-      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
+    // Single image upload
     const file = files[0];
-    // Validate if it's an image
     if (!file.type.startsWith('image/')) {
       alert('Por favor, selecione um arquivo de imagem válido.');
       return;
     }
 
-    // Limit size to ~5MB for Base64/localStorage stability
-    if (file.size > 5 * 1024 * 1024) {
-      alert('A imagem é muito grande. Por favor, escolha uma menor que 5MB para o teste local.');
-      return;
+    setUploading(true);
+    setProgress('Enviando imagem...');
+    try {
+      const url = await uploadImage(file);
+      onChange(url);
+    } catch (err) {
+      console.error('Upload error:', err);
+      alert('Erro ao enviar a imagem. Verifique sua conexão e tente novamente.');
+    } finally {
+      setUploading(false);
+      setProgress('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      onChange(reader.result as string);
-    };
-    reader.readAsDataURL(file);
   };
 
   return (
@@ -83,12 +88,14 @@ export function ImageUpload({
       <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest ml-1">{label}</label>
       
       <div 
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => !uploading && fileInputRef.current?.click()}
         style={{ aspectRatio: aspectRatio === "video" ? "16/9" : "9/16" }}
-        className={`relative rounded-3xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center p-6 gap-3 overflow-hidden ${
-          value 
-            ? 'border-brand-pink/50 bg-brand-pink/5 hover:border-brand-pink' 
-            : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
+        className={`relative rounded-3xl border-2 border-dashed transition-all flex flex-col items-center justify-center p-6 gap-3 overflow-hidden ${
+          uploading
+            ? 'cursor-wait border-brand-pink/50 bg-brand-pink/5'
+            : value 
+              ? 'border-brand-pink/50 bg-brand-pink/5 hover:border-brand-pink cursor-pointer' 
+              : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 cursor-pointer'
         }`}
       >
         <input 
@@ -101,7 +108,13 @@ export function ImageUpload({
           {...(directory ? { webkitdirectory: "", directory: "" } as any : {})}
         />
 
-        {value ? (
+        {uploading ? (
+          <>
+            <Loader2 size={32} className="animate-spin text-brand-pink" />
+            <p className="font-black text-sm text-white uppercase tracking-tight text-center">{progress}</p>
+            <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">Aguarde...</p>
+          </>
+        ) : value ? (
           <>
             <img 
               src={value} 

@@ -257,56 +257,206 @@ export const DEFAULT_DATA: SiteData = {
 };
 
 const STORAGE_KEY = "jelik_modas_site_data";
+const IMAGE_BUCKET = "jelik-images";
+
+// ─── Image Upload to Supabase Storage ─────────────────────────────────────────
+
+export const uploadImage = async (file: File): Promise<string> => {
+  const ext = file.name.split('.').pop() || 'jpg';
+  const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from(IMAGE_BUCKET)
+    .upload(fileName, file, { upsert: true, contentType: file.type });
+
+  if (error) throw new Error(`Upload failed: ${error.message}`);
+
+  const { data: urlData } = supabase.storage
+    .from(IMAGE_BUCKET)
+    .getPublicUrl(fileName);
+
+  return urlData.publicUrl;
+};
+
+// ─── Read: Merge All Tables into SiteData ────────────────────────────────────
 
 export const getSiteData = async (): Promise<SiteData> => {
   try {
-    // 1. Try Supabase first
-    const { data, error } = await supabase
-      .from('site_settings')
-      .select('data')
-      .eq('id', 1)
-      .single();
+    const [
+      settingsRes,
+      advantagesRes,
+      galleryRes,
+      logisticsRes,
+      hoursRes,
+      testimonialsRes
+    ] = await Promise.all([
+      supabase.from('site_settings').select('data').eq('id', 1).single(),
+      supabase.from('advantages').select('*').order('order_index'),
+      supabase.from('gallery').select('*').order('order_index'),
+      supabase.from('logistics_items').select('*').order('order_index'),
+      supabase.from('operating_hours').select('*').order('order_index'),
+      supabase.from('testimonials').select('*').order('order_index'),
+    ]);
 
-    if (!error && data?.data && Object.keys(data.data).length > 0) {
-      const siteData = { ...DEFAULT_DATA, ...data.data } as SiteData;
-      // Cache to localStorage
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(siteData));
-      return siteData;
+    // Start with defaults
+    let siteData: SiteData = { ...DEFAULT_DATA };
+
+    // Apply site_settings (texts, configs, etc.)
+    if (!settingsRes.error && settingsRes.data?.data) {
+      siteData = { ...siteData, ...settingsRes.data.data };
     }
 
-    // 2. Fallback to localStorage
-    const localData = localStorage.getItem(STORAGE_KEY);
-    if (!localData) {
-      // Initialize Supabase if empty
-      await saveSiteData(DEFAULT_DATA);
-      return DEFAULT_DATA;
+    // Apply advantages.items
+    if (!advantagesRes.error && advantagesRes.data && advantagesRes.data.length > 0) {
+      siteData.advantages = {
+        ...siteData.advantages,
+        items: advantagesRes.data.map(r => ({ title: r.title, desc: r.desc_text }))
+      };
     }
-    
-    return JSON.parse(localData);
+
+    // Apply gallery: split by img_type
+    if (!galleryRes.error && galleryRes.data && galleryRes.data.length > 0) {
+      const carouselItems = galleryRes.data.filter(r => r.img_type === 'carousel');
+      const highlightItems = galleryRes.data.filter(r => r.img_type === 'highlight');
+      if (carouselItems.length > 0) {
+        siteData.heroCarousel = carouselItems.map(r => r.url);
+      }
+      if (highlightItems.length > 0) {
+        siteData.highlightImages = highlightItems.map(r => ({ url: r.url, title: r.title || 'Conjunto Premium' }));
+      }
+    }
+
+    // Apply logistics.items
+    if (!logisticsRes.error && logisticsRes.data && logisticsRes.data.length > 0) {
+      siteData.logistics = {
+        ...siteData.logistics,
+        items: logisticsRes.data.map(r => ({ title: r.title, desc: r.desc_text }))
+      };
+    }
+
+    // Apply hours.items
+    if (!hoursRes.error && hoursRes.data && hoursRes.data.length > 0) {
+      siteData.hours = {
+        ...siteData.hours,
+        items: hoursRes.data.map(r => ({
+          day: r.day,
+          time: r.time_range || undefined,
+          closed: r.closed || undefined,
+          badge: r.badge || undefined,
+          highlight: r.highlight || undefined,
+        }))
+      };
+    }
+
+    // Apply testimonials.items
+    if (!testimonialsRes.error && testimonialsRes.data && testimonialsRes.data.length > 0) {
+      siteData.testimonials = {
+        ...siteData.testimonials,
+        items: testimonialsRes.data.map(r => ({ text: r.text, author: r.author, location: r.location }))
+      };
+    }
+
+    // Cache to localStorage
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(siteData));
+    return siteData;
+
   } catch (error) {
     console.error("Error loading site data:", error);
+    // Fallback to localStorage cache
+    const localData = localStorage.getItem(STORAGE_KEY);
+    if (localData) return JSON.parse(localData);
     return DEFAULT_DATA;
   }
 };
 
+// ─── Write: Save Each Section to Its Table ───────────────────────────────────
+
 export const saveSiteData = async (data: SiteData) => {
   try {
-    // 1. Save to Supabase
-    const { error } = await supabase
+    // 1. Extract data that goes into specialized tables
+    const { advantages, logistics, testimonials, hours, heroCarousel, highlightImages, ...rest } = data;
+
+    // Prepare a "settings-only" version without the table-specific arrays
+    const settingsPayload = {
+      ...rest,
+      advantages: { badge: advantages.badge, title: advantages.title, subtitle: advantages.subtitle },
+      logistics: { badge: logistics.badge, title: logistics.title, subtitle: logistics.subtitle, paymentMethods: logistics.paymentMethods, image: logistics.image },
+      testimonials: { badge: testimonials.badge, title: testimonials.title, subtitle: testimonials.subtitle },
+    };
+
+    // 2. Save settings
+    const settingsPromise = supabase
       .from('site_settings')
-      .upsert({ id: 1, data: data, updated_at: new Date().toISOString() });
+      .upsert({ id: 1, data: settingsPayload, updated_at: new Date().toISOString() });
 
-    if (error) throw error;
+    // 3. Save advantages items (delete all + re-insert)
+    const advantagesPromise = (async () => {
+      await supabase.from('advantages').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('advantages').insert(
+        advantages.items.map((item, i) => ({ title: item.title, desc_text: item.desc, order_index: i }))
+      );
+    })();
 
-    // 2. Save to localStorage (cache)
+    // 4. Save gallery: carousel + highlights (delete all + re-insert)
+    const galleryPromise = (async () => {
+      await supabase.from('gallery').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      const rows = [
+        ...heroCarousel.map((url, i) => ({ url, title: '', img_type: 'carousel', order_index: i })),
+        ...highlightImages.map((img, i) => ({ url: img.url, title: img.title, img_type: 'highlight', order_index: i })),
+      ];
+      if (rows.length > 0) await supabase.from('gallery').insert(rows);
+    })();
+
+    // 5. Save logistics items (delete all + re-insert)
+    const logisticsPromise = (async () => {
+      await supabase.from('logistics_items').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('logistics_items').insert(
+        logistics.items.map((item, i) => ({ title: item.title, desc_text: item.desc, order_index: i }))
+      );
+    })();
+
+    // 6. Save hours (delete all + re-insert)
+    const hoursPromise = (async () => {
+      await supabase.from('operating_hours').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('operating_hours').insert(
+        hours.items.map((item, i) => ({
+          day: item.day,
+          time_range: item.time || null,
+          closed: item.closed || false,
+          badge: item.badge || null,
+          highlight: item.highlight || null,
+          order_index: i
+        }))
+      );
+    })();
+
+    // 7. Save testimonials (delete all + re-insert)
+    const testimonialsPromise = (async () => {
+      await supabase.from('testimonials').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      await supabase.from('testimonials').insert(
+        testimonials.items.map((item, i) => ({ text: item.text, author: item.author, location: item.location, order_index: i }))
+      );
+    })();
+
+    await Promise.all([
+      settingsPromise,
+      advantagesPromise,
+      galleryPromise,
+      logisticsPromise,
+      hoursPromise,
+      testimonialsPromise,
+    ]);
+
+    // Cache locally
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    
+
     // Notify
     window.dispatchEvent(new Event('storage_update'));
     window.dispatchEvent(new Event('storage'));
+
   } catch (error) {
     console.error("Error saving site data:", error);
-    // Silent fail for offline/limit issues - still saves to local
+    // Save to localStorage as fallback
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }
 };
