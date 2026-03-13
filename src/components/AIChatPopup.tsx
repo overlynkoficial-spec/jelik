@@ -49,6 +49,13 @@ export function AIChatPopup({ isOpen, onClose, config, whatsappLink }: AIChatPop
   const [isTyping, setIsTyping] = React.useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
+  // Atualiza a mensagem de boas-vindas quando o nome do agente mudar
+  React.useEffect(() => {
+    setMessages([
+      { role: 'ai', content: `Olá! Eu sou ${config.agentName}, assistente virtual da Jelik Modas. Como posso te ajudar hoje?` }
+    ]);
+  }, [config.agentName]);
+
   React.useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
