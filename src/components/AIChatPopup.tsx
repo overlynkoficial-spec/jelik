@@ -1,7 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Send, MessageCircle, User } from 'lucide-react';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 interface ChatMessage {
   role: 'user' | 'ai';
@@ -19,7 +18,28 @@ interface AIChatPopupProps {
   whatsappLink: string;
 }
 
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || '');
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+
+async function callGemini(prompt: string): Promise<string> {
+  const response = await fetch(GEMINI_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 512, temperature: 0.7 }
+    })
+  });
+
+  if (!response.ok) {
+    const errBody = await response.text();
+    throw new Error(`HTTP ${response.status}: ${errBody.slice(0, 300)}`);
+  }
+
+  const data = await response.json();
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Sem resposta da IA.';
+}
 
 export function AIChatPopup({ isOpen, onClose, config, whatsappLink }: AIChatPopupProps) {
   const [messages, setMessages] = React.useState<ChatMessage[]>([
@@ -61,12 +81,6 @@ export function AIChatPopup({ isOpen, onClose, config, whatsappLink }: AIChatPop
     setIsTyping(true);
 
     try {
-      if (!import.meta.env.VITE_GEMINI_API_KEY) {
-        console.error("VITE_GEMINI_API_KEY não está definida! Verifique as variáveis de ambiente e lembre-se de refazer o deploy no Render após adicioná-las.");
-      }
-
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      
       const prompt = `
         Você é ${config.agentName}, o(a) assistente virtual oficial da Jelik Modas.
         Seu estilo de atendimento deve ser: ${config.style}.
@@ -82,22 +96,18 @@ export function AIChatPopup({ isOpen, onClose, config, whatsappLink }: AIChatPop
         Se a pergunta for sobre algo fora do treinamento ou muito específica sobre pedidos/estoque, oriente o cliente a usar o botão "WhatsApp" no topo para falar com um humano.
       `;
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-
+      const text = await callGemini(prompt);
       setMessages(prev => [...prev, { role: 'ai', content: text }]);
       playNotificationSound();
     } catch (error: any) {
-      console.error("Gemini Error:", error);
-      console.error("Gemini Error Details:", error?.message || error);
-      // Fallback para respostas locais simuladas em caso de erro na API
-      setTimeout(() => {
-        setMessages(prev => [...prev, { 
-          role: 'ai', 
-          content: "Olá! No momento estou com uma instabilidade técnica na minha IA, mas você pode falar diretamente com nossa equipe humana clicando no botão 'WhatsApp' aqui no topo! Como posso ajudar?" 
-        }]);
-      }, 1000);
+      const errMsg = error?.message || String(error) || 'Erro desconhecido';
+      console.error('Gemini Error:', errMsg);
+      const isQuota = errMsg.includes('429') || errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('exhausted');
+      const isKey = errMsg.includes('400') || errMsg.includes('401') || errMsg.includes('403');
+      let displayMsg = `⚠️ Erro de IA: ${errMsg.slice(0, 200)}`;
+      if (isQuota) displayMsg = '⚠️ Cota da API Gemini excedida (429). Verifique o faturamento no Google AI Studio.';
+      if (isKey) displayMsg = '⚠️ Chave de API inválida ou sem permissão (400/401/403). Verifique VITE_GEMINI_API_KEY.';
+      setMessages(prev => [...prev, { role: 'ai', content: displayMsg }]);
     } finally {
       setIsTyping(false);
     }
@@ -158,7 +168,7 @@ export function AIChatPopup({ isOpen, onClose, config, whatsappLink }: AIChatPop
               </div>
             </div>
 
-            {/* Mobile Human Support Bar (Bottom of Header) */}
+            {/* Mobile Human Support Bar */}
             <a 
               href={whatsappLink}
               target="_blank"
