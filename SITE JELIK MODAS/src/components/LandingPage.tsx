@@ -634,9 +634,19 @@ export function LandingPage() {
 
             <div className="pt-16 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-10 md:pr-32">
               <div className="flex flex-col md:flex-row items-center gap-6">
-                <p className="text-sm font-bold text-zinc-600 uppercase tracking-widest text-center md:text-left">
-                  © {new Date().getFullYear()} Jelik Modas. Elegância & Business.
-                </p>
+                <div className="flex flex-col items-center md:items-start gap-2">
+                  <p className="text-sm font-bold text-zinc-600 uppercase tracking-widest text-center md:text-left">
+                    © {new Date().getFullYear()} Jelik Modas. Elegância & Business.
+                  </p>
+                  <a 
+                    href="https://wa.me/5511989618044" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-[10px] font-medium text-zinc-700 hover:text-brand-pink transition-colors"
+                  >
+                    Desenvolvido por OverMidia
+                  </a>
+                </div>
                 <div className="flex items-center gap-4">
                   {data.social?.instagram && (
                     <a 

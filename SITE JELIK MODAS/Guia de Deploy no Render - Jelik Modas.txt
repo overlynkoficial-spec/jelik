@@ -1,0 +1,50 @@
+Guia de Deploy no Render.com - Jelik Modas
+Este guia contém o passo a passo detalhado para colocar o site da Jelik Modas no ar utilizando o Render.com como plataforma de hospedagem de sites estáticos.
+
+1. Pré-requisitos
+Sua conta no Render.com criada (via GitHub/Google).
+Seu código fonte enviado para um repositório no GitHub ou GitLab.
+2. Passo a Passo no Render
+Parte A: Criando o Projeto
+No Dashboard do Render, clique em "New +" e selecione "Static Site".
+Conecte sua conta do GitHub e selecione o repositório do projeto PROJETO JELIK MODAS.
+Parte B: Configurações de Build
+Na tela de configuração, preencha os seguintes campos:
+
+Name: jelik-modas (ou o nome que desejar).
+Root Directory: (Deixe em branco se o projeto estiver na raiz).
+Build Command: npm install && npm run build
+Publish Directory: dist
+Parte C: Variáveis de Ambiente (CRUCIAL)
+O site não funcionará sem as chaves do Supabase e Gemini.
+
+Vá na aba "Environment".
+Clique em "Add Environment Variable" e adicione as seguintes (copie exatamente do seu arquivo 
+.env
+ local):
+VITE_SUPABASE_URL: (Sua URL do Supabase)
+VITE_SUPABASE_ANON_KEY: (Sua Anon Key do Supabase)
+VITE_GEMINI_API_KEY: (Sua Chave do Gemini)
+Parte D: Configuração de Rotas (SPA)
+Como o projeto utiliza React Router para o Admin, precisamos configurar o Render para redirecionar todas as rotas para o 
+index.html
+.
+
+Vá na aba "Redirects/Rewrites".
+Clique em "Add Rule":
+Source: /*
+Destination: 
+/index.html
+Action: Rewrite
+Salve a regra. Isso garante que ao atualizar a página no painel administrativo, o site não dê erro 404.
+3. Finalização
+Clique em "Create Static Site". O Render irá baixar o código, instalar as dependências, gerar a build e disponibilizar uma URL (ex: jelik-modas.onrender.com).
+
+💡 Dicas Importantes
+SSL Grátis: O Render fornece certificado HTTPS automaticamente.
+Domínio Próprio: Se você tiver um domínio (ex: www.jelikmodas.com.br), pode configurá-lo na aba "Settings" -> "Custom Domains".
+Novas Alterações: Toda vez que você fizer um git push para o seu repositório, o Render fará um novo deploy automaticamente com as atualizações.
+IMPORTANT
+
+Lembre-se que agora os dados são salvos no Supabase. Se você resetar o banco de dados no Supabase, o site voltará ao estado inicial com os dados padrão.
+
